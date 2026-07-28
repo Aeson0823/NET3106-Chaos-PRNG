@@ -1,18 +1,3 @@
-"""
-NET3106 Assignment - Part D
-NIST SP 800-22 statistical test pipeline.
-
-Usage:
-    1. First VALIDATE the pipeline against the provided benchmark files:
-       python3 part_d_nist_tests.py benchmark_good.txt benchmark_weak.txt --validate
-
-    2. Then run it on your own strong/weak sources:
-       python3 part_d_nist_tests.py strong_source.txt weak_source.txt
-
-Runs all 14 tests listed in the assignment's Appendix B and prints a table
-of p-value + PASS/FAIL for each source.
-"""
-
 import sys
 import os
 
@@ -37,12 +22,17 @@ def read_bits_as_string(path):
         return f.read().strip()
 
 
-def run_all_tests(binary_data, label):
+def run_all_tests(binary_data, label, log_lines):
     """
     Run all 14 NIST SP 800-22 tests on a bit string and return a list of
     (test_name, p_value, verdict) tuples. verdict is 'PASS' or 'FAIL'.
+    Every printed line is also appended to log_lines so it can be saved to file.
     """
     results = []
+
+    def emit(line):
+        print(line)
+        log_lines.append(line)
 
     def add(name, outcome):
         # outcome is (p_value, bool) or (p_value, bool, error_msg)
@@ -50,9 +40,9 @@ def run_all_tests(binary_data, label):
         passed = outcome[1]
         verdict = "PASS" if passed else "FAIL"
         results.append((name, p_value, verdict))
-        print(f"  [{label}] {name:35s} p={p_value:.6f}  {verdict}")
+        emit(f"  [{label}] {name:35s} p={p_value:.6f}  {verdict}")
 
-    print(f"\nRunning NIST SP 800-22 suite on: {label}  ({len(binary_data)} bits)")
+    emit(f"\nRunning NIST SP 800-22 suite on: {label}  ({len(binary_data)} bits)")
 
     add("01 Frequency (Monobit)", ft.monobit_test(binary_data))
     add("02 Block Frequency", ft.block_frequency(binary_data))
@@ -75,21 +65,23 @@ def run_all_tests(binary_data, label):
     add("14 Cumulative Sums (reverse)", cst.cumulative_sums_test(binary_data, mode=1))
 
     n_pass = sum(1 for _, _, v in results if v == "PASS")
-    print(f"  -> {label}: {n_pass}/14 tests passed")
+    emit(f"  -> {label}: {n_pass}/14 tests passed")
 
     return results
 
 
-def print_comparison_table(results_a, label_a, results_b, label_b):
-    print(f"\n{'Test':35s} {label_a+' p':>12s} {label_a:>6s}  {label_b+' p':>12s} {label_b:>6s}")
-    print("-" * 90)
+def build_comparison_table(results_a, label_a, results_b, label_b):
+    lines = []
+    lines.append(f"\n{'Test':35s} {label_a+' p':>12s} {label_a:>6s}  {label_b+' p':>12s} {label_b:>6s}")
+    lines.append("-" * 90)
     for (name, pa, va), (_, pb, vb) in zip(results_a, results_b):
-        print(f"{name:35s} {pa:12.6f} {va:>6s}  {pb:12.6f} {vb:>6s}")
+        lines.append(f"{name:35s} {pa:12.6f} {va:>6s}  {pb:12.6f} {vb:>6s}")
+    return lines
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
-        print("Usage: python nist_tests.py strong_source.txt weak_source.txt [--validate]")
+        print("Usage: python3 part_d_nist_tests.py <source_A.txt> <source_B.txt> [--validate]")
         sys.exit(1)
 
     path_a, path_b = sys.argv[1], sys.argv[2]
@@ -101,7 +93,22 @@ if __name__ == "__main__":
     data_a = read_bits_as_string(path_a)
     data_b = read_bits_as_string(path_b)
 
-    results_a = run_all_tests(data_a, label_a)
-    results_b = run_all_tests(data_b, label_b)
+    log_lines = []
 
-    print_comparison_table(results_a, label_a, results_b, label_b)
+    results_a = run_all_tests(data_a, label_a, log_lines)
+    results_b = run_all_tests(data_b, label_b, log_lines)
+
+    table_lines = build_comparison_table(results_a, label_a, results_b, label_b)
+    for line in table_lines:
+        print(line)
+    log_lines.extend(table_lines)
+
+    # Save everything to a results file, in the same folder as this script
+    out_dir = os.path.dirname(os.path.abspath(__file__))
+    out_name = "nist_results_validation.txt" if validate_mode else "nist_results.txt"
+    out_path = os.path.join(out_dir, out_name)
+
+    with open(out_path, "w") as f:
+        f.write("\n".join(log_lines) + "\n")
+
+    print(f"\nResults saved to: {out_path}")
