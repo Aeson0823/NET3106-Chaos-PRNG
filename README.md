@@ -95,7 +95,7 @@ against the two reference files provided with the assignment
 obtain them from the course portal):
 
 ```bash
-python3 part_d_nist_tests.py benchmark_good.txt benchmark_weak.txt --validate
+python nist_tests.py benchmark_good.txt benchmark_weak.txt --validate
 ```
 
 `benchmark_good.txt` should pass all 14 applicable tests and
